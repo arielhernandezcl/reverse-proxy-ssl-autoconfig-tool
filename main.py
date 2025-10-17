@@ -2,9 +2,7 @@ import argparse
 import subprocess
 import os
 
-
 CERTBOT_EMAIL = "" 
-
 NGINX_SITES_AVAILABLE = "/etc/nginx/sites-available"
 NGINX_SITES_ENABLED = "/etc/nginx/sites-enabled"
 
