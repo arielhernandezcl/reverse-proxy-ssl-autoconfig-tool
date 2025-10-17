@@ -27,7 +27,6 @@ server {{
     return config_content
 
 def create_and_enable_proxy(domain, config_content):
-    """Crea el archivo de configuración y lo habilita en Nginx."""
     config_file_path = os.path.join(NGINX_SITES_AVAILABLE, f"{domain}.conf")
     link_path = os.path.join(NGINX_SITES_ENABLED, f"{domain}.conf")
     
