@@ -17,6 +17,7 @@ APACHE_A2ENSITE = ["a2ensite"]
 # --- Detección del Servidor Web ---
 
 def detect_web_server():
+    """Detecta si Nginx o Apache2 están instalados y activos."""
     try:
         subprocess.run(["nginx", "-v"], check=True, capture_output=True)
         if os.path.isdir(NGINX_SITES_AVAILABLE):
@@ -38,6 +39,7 @@ def detect_web_server():
 # =================================================================
 
 def generate_nginx_config(domain, port):
+    """Genera el contenido de la configuración de proxy inverso para Nginx (HTTP)."""
     config_content = f"""
 server {{
     listen 80;
@@ -56,6 +58,7 @@ server {{
     return config_content
 
 def create_and_enable_nginx_proxy(domain, config_content):
+    """Crea, habilita y verifica la configuración de Nginx."""
     config_file_path = os.path.join(NGINX_SITES_AVAILABLE, f"{domain}.conf")
     link_path = os.path.join(NGINX_SITES_ENABLED, f"{domain}.conf")
     
@@ -92,6 +95,7 @@ def create_and_enable_nginx_proxy(domain, config_content):
         return False
 
 def run_certbot_nginx(domain, email):
+    """Ejecuta Certbot con plugin Nginx."""
     try:
         certbot_command = [
             "certbot", "run", 
@@ -126,6 +130,7 @@ def run_certbot_nginx(domain, email):
 # =================================================================
 
 def generate_apache_config(domain, port):
+    """Genera el contenido de la configuración de proxy inverso para Apache2 (HTTP)."""
     config_content = f"""
 <VirtualHost *:80>
     ServerName {domain}
@@ -148,6 +153,7 @@ def generate_apache_config(domain, port):
     return config_content
 
 def enable_apache_proxy_modules():
+    """Habilita los módulos de proxy necesarios en Apache2."""
     print("- Verificando y habilitando módulos de proxy de Apache2...")
     
     for mod in ["proxy", "proxy_http"]:
@@ -164,6 +170,7 @@ def enable_apache_proxy_modules():
     return True
     
 def create_and_enable_apache_proxy(domain, config_content):
+    """Crea, habilita y verifica la configuración de Apache2."""
     
     if not enable_apache_proxy_modules():
         return False
@@ -205,6 +212,7 @@ def create_and_enable_apache_proxy(domain, config_content):
         return False
 
 def run_certbot_apache(domain, email):
+    """Ejecuta Certbot con plugin Apache."""
     try:
         certbot_command = [
             "certbot", "run", 
@@ -251,15 +259,21 @@ def main():
     domain = args.domain
     port = args.port
     
+    # 1. Detección del servidor web
     web_server = detect_web_server()
 
+    # Mensaje de detección
     if web_server is None:
         print("X No se pudo detectar una instalación activa de Nginx ni Apache2.")
         print("Asegúrate de que uno de ellos esté instalado y de que las rutas de configuración existan.")
         sys.exit(1)
     
-    print(f"🎉 Servidor web detectado: **{web_server.upper()}**")
-    print(f"- Configurando Proxy Reverso para: https://{domain} -> http://localhost:{port}...")
+    print("-" * 50)
+    print(f"**🛠️ Servidor Web Detectado:** {web_server.upper()}")
+    print(f"**🌐 Acción:** Configurando Proxy Reverso para: https://{domain} -> http://localhost:{port}")
+    print("-" * 50)
+    
+    # 2. Configuración del proxy inverso según el servidor
     
     if web_server == "nginx":
         config_content = generate_nginx_config(domain, port)
@@ -274,7 +288,8 @@ def main():
         print("X Proceso detenido debido a fallos en la configuración inicial del servidor web.")
         return
 
-    print(f"\n- Iniciando Certbot para obtención e instalación del certificado SSL...")
+    # 3. Ejecución de Certbot
+    print(f"\n- Iniciando Certbot para obtención e instalación del certificado SSL (usando el plugin {web_server.upper()})...")
     if not run_certbot_func(domain, args.email): 
         print(f"X Fallo: La configuración de {web_server.upper()} está activa, pero solo por HTTP (puerto 80).")
         
