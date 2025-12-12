@@ -1,6 +1,6 @@
 # Reverse Proxy SSL Auto-Configuration Tool
 
-This Python script automates the setup of an Nginx reverse proxy with automatic SSL certificate acquisition using Let's Encrypt Certbot. It simplifies the process of configuring HTTPS for applications running on local ports.
+This Python script automates the setup of a reverse proxy (Nginx or Apache2) with automatic SSL certificate acquisition using Let's Encrypt Certbot. It simplifies the process of configuring HTTPS for applications running on local ports.
 
 ## Table of Contents
 - [Features](#features)
@@ -15,22 +15,25 @@ This Python script automates the setup of an Nginx reverse proxy with automatic 
 
 ## Features
 
-- **Automated Nginx Configuration**: Creates and enables Nginx reverse proxy configuration
+- **Automated Web Server Configuration**: Creates and enables reverse proxy configuration for Nginx or Apache2
+- **Automatic Server Detection**: Detects and uses available web server (Nginx or Apache2) if not specified
 - **SSL Certificate Management**: Automatically obtains Let's Encrypt SSL certificates
 - **HTTPS Redirection**: Configures automatic HTTP to HTTPS redirection
 - **Error Handling**: Comprehensive error handling and cleanup mechanisms
-- **Validation**: Nginx configuration syntax validation before reload
+- **Flexible Configuration**: Supports both Nginx and Apache2 configurations
 
 ## Prerequisites
 
 - Ubuntu/Debian-based Linux system
 - Root or sudo access
-- Nginx installed and running
-- Certbot installed with Nginx plugin
+- Either Nginx or Apache2 installed and running
+- Certbot installed with appropriate plugin (Nginx or Apache2)
 - Domain properly pointing to the server
 - Ports 80 and 443 accessible
 
 ## Installation
+
+### For Nginx:
 
 1. **Install Nginx**:
 ```bash
@@ -43,6 +46,21 @@ sudo systemctl enable nginx
 2. **Install Certbot with Nginx plugin**:
 ```bash
 sudo apt install certbot python3-certbot-nginx
+```
+
+### For Apache2:
+
+1. **Install Apache2**:
+```bash
+sudo apt update
+sudo apt install apache2
+sudo systemctl start apache2
+sudo systemctl enable apache2
+```
+
+2. **Install Certbot with Apache2 plugin**:
+```bash
+sudo apt install certbot python3-certbot-apache
 ```
 
 3. **Clone or download the script**:
@@ -63,36 +81,50 @@ sudo python3 main.py <domain> <port> [options]
 
 ### Options
 
-- `-e, --email`: Email address for Let's Encrypt registration (default: `email@email`)
+- `-e, --email`: Email address for Let's Encrypt registration (default: `#`)
+- `-s, --server`: Specify web server to use: `nginx` or `apache2` (optional, auto-detects if not specified)
 
 ### Examples
 
 ```bash
-# Basic usage
+# Basic usage (auto-detects web server)
 sudo python3 main.py example.com 5000
 
 # With custom email
 sudo python3 main.py example.com 5000 -e your-email@example.com
+
+# Force Nginx usage
+sudo python3 main.py example.com 5000 -s nginx
+
+# Force Apache2 usage
+sudo python3 main.py example.com 5000 -s apache2
 ```
 
 ## How It Works
 
-1. **Nginx Configuration Generation**:
+1. **Web Server Detection**:
+   - If no server is specified with `-s`, the script detects available web server (Nginx or Apache2)
+   - Uses the detected or specified server for the rest of the process
+
+2. **Configuration Generation**:
    - Creates a basic HTTP configuration for the specified domain and port
    - Sets proper proxy headers for forwarding requests
+   - Uses appropriate configuration format for detected server (Nginx or Apache2)
 
-2. **Configuration Activation**:
-   - Creates configuration file in `/etc/nginx/sites-available/`
-   - Creates symbolic link in `/etc/nginx/sites-enabled/`
+3. **Configuration Activation**:
+   - For Nginx: Creates configuration file in `/etc/nginx/sites-available/` and symbolic link in `/etc/nginx/sites-enabled/`
+   - For Apache2: Creates configuration file in `/etc/apache2/sites-available/` and enables site with `a2ensite`
    - Validates configuration syntax
-   - Reloads Nginx service
+   - Reloads web server service
 
-3. **SSL Certificate Setup**:
-   - Uses Certbot to obtain Let's Encrypt certificate
+4. **SSL Certificate Setup**:
+   - Uses Certbot with appropriate plugin (Nginx or Apache2) to obtain Let's Encrypt certificate
    - Automatically configures HTTPS and redirects
-   - Updates Nginx configuration for SSL
+   - Updates web server configuration for SSL
 
 ## Configuration Details
+
+### Nginx Configuration
 
 The script generates an Nginx configuration with the following features:
 
@@ -112,7 +144,31 @@ server {
 }
 ```
 
-After SSL setup, Certbot automatically updates the configuration to include HTTPS settings and redirects HTTP traffic to HTTPS.
+### Apache2 Configuration
+
+The script generates an Apache2 configuration with the following features:
+
+```apache
+<VirtualHost *:80>
+    ServerName your-domain.com
+
+    <Proxy "*">
+        Order deny,allow
+        Allow from all
+    </Proxy>
+
+    ProxyPreserveHost On
+    ProxyRequests Off
+
+    ProxyPass / http://localhost:your-port/
+    ProxyPassReverse / http://localhost:your-port/
+
+    ErrorLog ${APACHE_LOG_DIR}/error_your-domain.com.log
+    CustomLog ${APACHE_LOG_DIR}/access_your-domain.com.log combined
+</VirtualHost>
+```
+
+After SSL setup, Certbot automatically updates the configuration to include HTTPS settings and redirects HTTP traffic to HTTPS for both web servers.
 
 ### Proxy Headers Explained
 
@@ -139,14 +195,26 @@ After SSL setup, Certbot automatically updates the configuration to include HTTP
 
 #### 4. Certbot Installation Missing
 - **Cause**: Certbot not installed
-- **Solution**: Install with `sudo apt install certbot python3-certbot-nginx`
+- **Solution**: Install the appropriate plugin:
+  - For Nginx: `sudo apt install certbot python3-certbot-nginx`
+  - For Apache2: `sudo apt install certbot python3-certbot-apache`
 
 #### 5. Nginx Configuration Error
 - **Cause**: Invalid configuration syntax
 - **Solution**: Check `/etc/nginx/sites-available/` for issues
 
+#### 6. Apache2 Configuration Error
+- **Cause**: Invalid configuration syntax or missing modules
+- **Solution**: Check `/etc/apache2/sites-available/` for issues and ensure proxy modules are enabled:
+  - `sudo a2enmod proxy proxy_http`
+
+#### 7. Web Server Detection Failure
+- **Cause**: Neither Nginx nor Apache2 detected or both installed but one misconfigured
+- **Solution**: Explicitly specify server with `-s nginx` or `-s apache2`
+
 ### Debugging Commands
 
+For Nginx:
 ```bash
 # Test Nginx configuration
 sudo nginx -t
@@ -156,15 +224,35 @@ sudo systemctl status nginx
 
 # View Nginx error logs
 sudo tail -f /var/log/nginx/error.log
+```
 
+For Apache2:
+```bash
+# Test Apache2 configuration
+sudo apache2ctl configtest
+
+# Check Apache2 status
+sudo systemctl status apache2
+
+# View Apache2 error logs
+sudo tail -f /var/log/apache2/error.log
+```
+
+Common commands:
+```bash
 # Check Certbot logs
 sudo tail -f /var/log/letsencrypt/letsencrypt.log
+
+# Check listening ports
+sudo netstat -tuln | grep :80
+sudo netstat -tuln | grep :443
 ```
 
 ### Manual Cleanup
 
 If the script fails and leaves incomplete configuration:
 
+For Nginx:
 ```bash
 # Remove configuration file
 sudo rm /etc/nginx/sites-available/your-domain.conf
@@ -176,12 +264,25 @@ sudo rm /etc/nginx/sites-enabled/your-domain.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
+For Apache2:
+```bash
+# Disable the site
+sudo a2dissite your-domain.conf
+
+# Remove configuration file
+sudo rm /etc/apache2/sites-available/your-domain.conf
+
+# Reload Apache2
+sudo systemctl reload apache2
+```
+
 ## Security Considerations
 
-- **Always run with sudo**: The script requires elevated privileges to modify Nginx configurations
+- **Always run with sudo**: The script requires elevated privileges to modify web server configurations
 - **Email Privacy**: Be cautious when using the default email address in production
 - **Certificate Validity**: Let's Encrypt certificates are valid for 90 days; Certbot auto-renewal should be configured
 - **Firewall Configuration**: Ensure proper firewall rules allow traffic on ports 80/443
+- **Web Server Modules**: For Apache2, ensure only necessary modules are enabled
 
 ### Certificate Renewal
 
@@ -205,19 +306,31 @@ Use the `-e` or `--email` flag to specify your email address instead of the defa
 sudo python3 main.py example.com 5000 -e admin@example.com
 ```
 
-### Manual Nginx Configuration
-After running the script, you can manually edit the Nginx configuration file at:
-`/etc/nginx/sites-available/your-domain.conf`
+### Specify Web Server Explicitly
+Use the `-s` or `--server` flag to specify which web server to use:
+
+```bash
+# Force Nginx
+sudo python3 main.py example.com 5000 -s nginx
+
+# Force Apache2
+sudo python3 main.py example.com 5000 -s apache2
+```
+
+### Manual Configuration
+After running the script, you can manually edit the configuration file at:
+- For Nginx: `/etc/nginx/sites-available/your-domain.conf`
+- For Apache2: `/etc/apache2/sites-available/your-domain.conf`
 
 ## Architecture
 
 ```
-Internet (Port 80/443) → Nginx (SSL Termination) → Local Application (Custom Port)
+Internet (Port 80/443) → Web Server (SSL Termination) → Local Application (Custom Port)
 ```
 
 The script sets up this architecture automatically:
-1. Nginx receives requests on ports 80/443
-2. SSL termination occurs at Nginx level
+1. Web server (Nginx/Apache2) receives requests on ports 80/443
+2. SSL termination occurs at web server level
 3. Requests are forwarded to your application running on localhost:port
 4. Response flows back through the same path
 

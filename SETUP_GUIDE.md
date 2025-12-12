@@ -26,7 +26,7 @@
 sudo apt update && sudo apt upgrade -y
 ```
 
-### Step 2: Install Nginx Web Server
+### Option A: Install Nginx Web Server
 ```bash
 # Install Nginx
 sudo apt install nginx
@@ -39,10 +39,35 @@ sudo systemctl enable nginx
 sudo systemctl status nginx
 ```
 
-### Step 3: Install Certbot with Nginx Plugin
+### Option B: Install Apache2 Web Server
+```bash
+# Install Apache2
+sudo apt install apache2
+
+# Start and enable Apache2
+sudo systemctl start apache2
+sudo systemctl enable apache2
+
+# Verify Apache2 is running
+sudo systemctl status apache2
+```
+
+### Step 3: Install Certbot with Appropriate Plugin
+Choose the appropriate plugin based on your web server:
+
+For Nginx:
 ```bash
 # Install Certbot and Nginx plugin
 sudo apt install certbot python3-certbot-nginx
+
+# Verify installation
+certbot --version
+```
+
+For Apache2:
+```bash
+# Install Certbot and Apache2 plugin
+sudo apt install certbot python3-certbot-apache
 
 # Verify installation
 certbot --version
@@ -55,8 +80,12 @@ sudo ufw allow ssh
 sudo ufw allow OpenSSH
 
 # Allow HTTP and HTTPS
+# For Nginx:
 sudo ufw allow 'Nginx Full'
-# Or separately:
+
+# For Apache2:
+sudo ufw allow 'Apache Full'
+# Or separately for both:
 sudo ufw allow 80
 sudo ufw allow 443
 
@@ -109,7 +138,9 @@ python3 main.py --help
 
 ## Verification of Prerequisites
 
-### Verify Nginx Installation
+### Verify Web Server Installation
+
+For Nginx:
 ```bash
 # Check if Nginx is installed and running
 nginx -v
@@ -122,14 +153,27 @@ sudo nginx -t
 curl -I http://localhost
 ```
 
+For Apache2:
+```bash
+# Check if Apache2 is installed and running
+apache2 -v
+sudo systemctl status apache2
+
+# Test Apache2 configuration
+sudo apache2ctl configtest
+
+# Verify Apache2 serves on port 80
+curl -I http://localhost
+```
+
 ### Verify Certbot Installation
 ```bash
 # Check certbot version and installation
 certbot --version
 
-# Test certbot with nginx plugin
+# Test certbot with appropriate plugin
 certbot plugins
-# Should list "nginx" in the installed plugins
+# Should list "nginx" or "apache" in the installed plugins depending on your setup
 ```
 
 ### Verify System Permissions
@@ -219,18 +263,20 @@ Before running the script, ensure:
 You can test the configuration process with a dry run approach:
 
 1. **Test HTTP-only configuration first** (without SSL):
+
+For Nginx:
    ```bash
    # Manually create a simple Nginx config to test proxy
    sudo nano /etc/nginx/sites-available/test-proxy
    ```
-   
+
    Add this test configuration:
    ```nginx
    server {
        listen 80;
        listen [::]:80;
        server_name your-domain.com;
-       
+
        location / {
            proxy_pass http://localhost:YOUR_PORT;
            proxy_set_header Host $host;
@@ -241,11 +287,47 @@ You can test the configuration process with a dry run approach:
    }
    ```
 
+For Apache2:
+   ```bash
+   # Manually create a simple Apache2 config to test proxy
+   sudo nano /etc/apache2/sites-available/test-proxy.conf
+   ```
+
+   Add this test configuration:
+   ```apache
+   <VirtualHost *:80>
+       ServerName your-domain.com
+
+       <Proxy "*">
+           Order deny,allow
+           Allow from all
+       </Proxy>
+
+       ProxyPreserveHost On
+       ProxyRequests Off
+
+       ProxyPass / http://localhost:YOUR_PORT/
+       ProxyPassReverse / http://localhost:YOUR_PORT/
+
+       ErrorLog ${APACHE_LOG_DIR}/error_test-proxy.log
+       CustomLog ${APACHE_LOG_DIR}/access_test-proxy.log combined
+   </VirtualHost>
+   ```
+
 2. **Enable the test configuration**:
+
+For Nginx:
    ```bash
    sudo ln -s /etc/nginx/sites-available/test-proxy /etc/nginx/sites-enabled/
    sudo nginx -t
    sudo systemctl reload nginx
+   ```
+
+For Apache2:
+   ```bash
+   sudo a2ensite test-proxy.conf
+   sudo apache2ctl configtest
+   sudo systemctl reload apache2
    ```
 
 3. **Test HTTP access**:
@@ -275,15 +357,29 @@ sudo ufw enable
 
 ### Log Configuration
 After successful setup, monitor these logs:
+
+For Nginx:
 ```bash
 # Nginx access logs
 sudo tail -f /var/log/nginx/access.log
 
-# Nginx error logs  
+# Nginx error logs
 sudo tail -f /var/log/nginx/error.log
 
-# System logs
+# System logs for Nginx
 sudo journalctl -u nginx -f
+```
+
+For Apache2:
+```bash
+# Apache2 access logs
+sudo tail -f /var/log/apache2/access.log
+
+# Apache2 error logs
+sudo tail -f /var/log/apache2/error.log
+
+# System logs for Apache2
+sudo journalctl -u apache2 -f
 ```
 
 ### Certificate Renewal Setup
@@ -299,6 +395,8 @@ sudo crontab -e
 ## Troubleshooting Preparation
 
 ### Essential Commands for Debugging
+
+For Nginx:
 ```bash
 # Nginx configuration test
 sudo nginx -t
@@ -306,13 +404,29 @@ sudo nginx -t
 # Nginx status
 sudo systemctl status nginx
 
-# Check active connections
-sudo netstat -tulnp | grep :80
-sudo netstat -tulnp | grep :443
-
 # Check Nginx configuration files
 ls -la /etc/nginx/sites-available/
 ls -la /etc/nginx/sites-enabled/
+```
+
+For Apache2:
+```bash
+# Apache2 configuration test
+sudo apache2ctl configtest
+
+# Apache2 status
+sudo systemctl status apache2
+
+# Check Apache2 configuration files
+ls -la /etc/apache2/sites-available/
+ls -la /etc/apache2/sites-enabled/
+```
+
+Common commands:
+```bash
+# Check active connections
+sudo netstat -tulnp | grep :80
+sudo netstat -tulnp | grep :443
 
 # Certbot certificate status
 sudo certbot certificates
@@ -336,13 +450,31 @@ Before executing the main script, verify:
 
 Once all prerequisites are verified:
 
+### For Auto-Detection
 ```bash
 sudo python3 main.py your-domain.com your-app-port -e your-email@example.com
 ```
 
-Example:
+### For Nginx Specifically
 ```bash
+sudo python3 main.py your-domain.com your-app-port -e your-email@example.com -s nginx
+```
+
+### For Apache2 Specifically
+```bash
+sudo python3 main.py your-domain.com your-app-port -e your-email@example.com -s apache2
+```
+
+Examples:
+```bash
+# Auto-detect web server
 sudo python3 main.py example.com 3000 -e admin@example.com
+
+# Force Nginx usage
+sudo python3 main.py example.com 3000 -e admin@example.com -s nginx
+
+# Force Apache2 usage
+sudo python3 main.py example.com 3000 -e admin@example.com -s apache2
 ```
 
 This setup guide provides all the necessary steps to prepare your system for using the reverse proxy SSL auto-configuration tool, ensuring a smooth installation and configuration process.
